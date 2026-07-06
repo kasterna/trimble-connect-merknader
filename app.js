@@ -12,9 +12,18 @@ const merknadInput = document.getElementById("merknad-input");
 const formSubmitBtn = document.getElementById("form-submit-btn");
 const formCancelBtn = document.getElementById("form-cancel-btn");
 
+// Fase 2 backend (D:\Trimble Connect-prosjekter\Trimble Connect Merknader\backend):
+// kjører kun ifcopenshell-logikken mot én lokalt konfigurert IFC-fil ennå — Trimble
+// Connect REST API-integrasjonen (nedlasting/opplasting av ekte fil-versjoner, som
+// krever en egen OAuth-app) er ikke bygget. Fungerer derfor kun når begge kjører
+// lokalt (http mot http); når extensionen kjøres fra GitHub Pages (https) inni ekte
+// Trimble Connect, må BACKEND_URL peke på en ekte, alltid-på HTTPS-backend i stedet.
+const BACKEND_URL = "http://localhost:5003";
+
 let API = null;
 let isAdmin = false;
 let currentUser = null; // { id, firstName, lastName, email }
+let currentProjectName = "";
 let currentSelection = null; // { modelId, runtimeId, guid, name, class }
 
 function log(msg) {
@@ -126,15 +135,31 @@ function closeVimpelForm() {
   vimpelForm.style.display = "none";
 }
 
-/** Fase 2 (egen økt): dette er stedet der payloaden postes til backend-tjenesten som
- *  gjør selve IFC-endringen (ifcopenshell) og laster opp ny versjon til Trimble Connect.
- *  Backend-arkitektur/hosting er ikke besluttet ennå, så her stubber vi kallet i stedet
- *  for å late som det lyktes. Payload-formatet matcher allerede kø-item-formatet i
- *  D:\SOS-Kolbotn\app\ifc_ops.py (kjor_ko_sos/_behandle_vimpel/_behandle_fjern_vimpel)
- *  slik at den koden kan gjenbrukes nesten uendret i Fase 2. */
+/** Poster payloaden til Fase 2-backend-en (se backend/app.py), som kjører selve
+ *  IFC-endringen med ifcopenshell mot en lokalt konfigurert fil og skriver den atomisk
+ *  tilbake. Payload-formatet matcher kø-item-formatet i
+ *  D:\SOS-Kolbotn\app\ifc_ops.py / backend/ifc_ops.py (behandle_items).
+ *  Trimble Connect REST API-integrasjonen (ekte nedlasting/opplasting av fil-versjoner
+ *  fra selve TC-prosjektet) er ikke bygget ennå — se BACKEND_URL-kommentaren øverst. */
 async function postToBackend(payload) {
-  log("Payload klar for backend (IKKE sendt ennå): " + JSON.stringify(payload));
-  setStatus("Backend ikke koblet ennå ✘", "error");
+  const endpoint = payload.type === "vimpel" ? "/api/vimpel" : "/api/fjern-vimpel";
+  setStatus("Sender til backend...", "busy");
+  try {
+    const res = await fetch(BACKEND_URL + endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || data.melding || `Backend svarte ${res.status}`);
+    }
+    setStatus("Tilkoblet Trimble Connect ✔", "ok");
+    log("Backend OK: " + data.melding);
+  } catch (err) {
+    setStatus("Feil fra backend ✘", "error");
+    log("Feil ved kall til backend (" + endpoint + "): " + err.message);
+  }
 }
 
 async function submitVimpelForm() {
@@ -148,6 +173,7 @@ async function submitVimpelForm() {
     guid: currentSelection.guid,
     merknad,
     utfort_av: currentUser ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() || currentUser.email : "",
+    prosjekt: currentProjectName,
   };
   closeVimpelForm();
   await postToBackend(payload);
@@ -180,6 +206,12 @@ async function main() {
     window.API = API;
     setStatus("Tilkoblet Trimble Connect ✔", "ok");
     log("WorkspaceAPI.connect() lyktes.");
+    try {
+      const project = await API.project.getProject();
+      currentProjectName = project.name || "";
+    } catch (err) {
+      log("Feil ved henting av prosjektnavn: " + err.message);
+    }
     await checkRole();
   } catch (err) {
     setStatus("Kunne ikke koble til Trimble Connect ✘", "error");
