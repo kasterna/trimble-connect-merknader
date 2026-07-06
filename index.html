@@ -110,6 +110,61 @@
       cursor: pointer;
     }
 
+    #farge-box {
+      margin-bottom: 10px;
+    }
+    #farge-box h2 {
+      font-size: 13px;
+      margin: 0 0 6px 0;
+    }
+    #farge-swatches {
+      display: flex;
+      gap: 8px;
+    }
+    .farge-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid #ccc;
+      cursor: pointer;
+      padding: 0;
+    }
+    .farge-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.4;
+    }
+
+    #farge-form {
+      display: none;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #fff;
+    }
+    #farge-form label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    #farge-form textarea {
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 60px;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 6px;
+    }
+    #farge-form .form-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #farge-form .form-actions button {
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+
     #queue-box {
       border: 1px solid #ddd;
       border-radius: 4px;
@@ -178,10 +233,10 @@
   <div id="page-title"><img src="icon.svg" alt="" /> Merknader</div>
   <div id="status">Kobler til Trimble Connect...</div>
 
-  <div id="readonly-note">Du har kun lesetilgang i dette prosjektet. Kontakt en prosjektadmin for å legge til eller fjerne vimpelmerknader.</div>
+  <div id="readonly-note">Du har kun lesetilgang i dette prosjektet. Kontakt en prosjektadmin for å legge til/fjerne vimpelmerknader eller fargelegge elementer.</div>
 
   <div id="selection-box">
-    <div id="selection-empty" class="empty">Velg ett element i 3D-vieweren.</div>
+    <div id="selection-empty" class="empty">Velg ett eller flere elementer i 3D-vieweren.</div>
     <div id="selection-details" style="display:none">
       <div id="selection-name"></div>
       <div id="selection-guid"></div>
@@ -202,9 +257,29 @@
     </div>
   </div>
 
+  <div id="farge-box">
+    <h2>Fargelegg element(er)</h2>
+    <div id="farge-swatches">
+      <button class="farge-btn" data-hex="#CC0000" data-navn="Rød" style="background:#CC0000" title="Rød" disabled></button>
+      <button class="farge-btn" data-hex="#2E7D32" data-navn="Grønn" style="background:#2E7D32" title="Grønn" disabled></button>
+      <button class="farge-btn" data-hex="#FDD835" data-navn="Gul" style="background:#FDD835" title="Gul" disabled></button>
+      <button class="farge-btn" data-hex="#1565C0" data-navn="Blå" style="background:#1565C0" title="Blå" disabled></button>
+      <button class="farge-btn" data-hex="#EF6C00" data-navn="Oransje" style="background:#EF6C00" title="Oransje" disabled></button>
+    </div>
+  </div>
+
+  <div id="farge-form">
+    <label for="farge-merknad-input">Merknad</label>
+    <textarea id="farge-merknad-input" placeholder="Skriv merknaden her..."></textarea>
+    <div class="form-actions">
+      <button id="farge-form-submit-btn">Bekreft</button>
+      <button id="farge-form-cancel-btn">Avbryt</button>
+    </div>
+  </div>
+
   <div id="queue-box">
     <h2>Kø (eksporteres, prosesseres lokalt senere)</h2>
-    <div id="queue-empty" class="queue-empty">Tom. Legg til/fjern en vimpel for å legge den i køen.</div>
+    <div id="queue-empty" class="queue-empty">Tom. Legg til/fjern en vimpel eller fargelegg element(er) for å legge det i køen.</div>
     <ul id="queue-list"></ul>
     <div id="queue-actions">
       <button id="queue-download-btn" disabled>Last ned kø (<span id="queue-count">0</span>)</button>

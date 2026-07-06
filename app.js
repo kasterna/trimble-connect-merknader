@@ -16,12 +16,18 @@ const queueListEl = document.getElementById("queue-list");
 const queueCountEl = document.getElementById("queue-count");
 const queueDownloadBtn = document.getElementById("queue-download-btn");
 const queueClearBtn = document.getElementById("queue-clear-btn");
+const fargeButtons = Array.from(document.querySelectorAll(".farge-btn"));
+const fargeForm = document.getElementById("farge-form");
+const fargeMerknadInput = document.getElementById("farge-merknad-input");
+const fargeFormSubmitBtn = document.getElementById("farge-form-submit-btn");
+const fargeFormCancelBtn = document.getElementById("farge-form-cancel-btn");
 
 let API = null;
 let isAdmin = false;
 let currentUser = null; // { id, firstName, lastName, email }
 let currentProjectName = "";
-let currentSelection = null; // { modelId, runtimeId, guid, name, class }
+let currentSelection = []; // [{ modelId, runtimeId, guid, name, class }, ...] — 0, 1 or many
+let pendingFarge = null; // { hex, navn } — color picked, waiting for merknad confirmation
 let queue = []; // { item, label } — item matches backend/ifc_ops.py's queue-item shape
 
 function log(msg) {
@@ -68,29 +74,46 @@ async function checkRole() {
 }
 
 function updateActionButtons() {
-  const hasSelection = !!currentSelection;
-  addBtn.disabled = !(isAdmin && hasSelection);
-  removeBtn.disabled = !(isAdmin && hasSelection);
+  const single = currentSelection.length === 1;
+  const any = currentSelection.length >= 1;
+  addBtn.disabled = !(isAdmin && single);
+  removeBtn.disabled = !(isAdmin && single);
+  fargeButtons.forEach((btn) => {
+    btn.disabled = !(isAdmin && any);
+  });
+}
+
+function elementLabel(el) {
+  return el.name || el.class || el.guid;
 }
 
 function renderSelection() {
-  if (currentSelection) {
-    selectionEmptyEl.style.display = "none";
-    selectionDetailsEl.style.display = "block";
-    selectionNameEl.textContent = currentSelection.name || currentSelection.class || "(uten navn)";
-    selectionGuidEl.textContent = currentSelection.guid;
-  } else {
+  if (currentSelection.length === 0) {
     selectionEmptyEl.style.display = "block";
     selectionDetailsEl.style.display = "none";
+  } else if (currentSelection.length === 1) {
+    selectionEmptyEl.style.display = "none";
+    selectionDetailsEl.style.display = "block";
+    selectionNameEl.textContent = elementLabel(currentSelection[0]);
+    selectionGuidEl.textContent = currentSelection[0].guid;
+  } else {
+    selectionEmptyEl.style.display = "none";
+    selectionDetailsEl.style.display = "block";
+    selectionNameEl.textContent = `${currentSelection.length} elementer valgt`;
+    selectionGuidEl.textContent = currentSelection.map(elementLabel).join(", ");
   }
   updateActionButtons();
 }
 
-/** Handles a selection made in the 3D Viewer. Only a single selected element is
- *  supported for adding/removing a vimpel, mirroring the "søk armering" extension's
- *  origin.isSelf guard so our own setSelection() calls don't re-trigger this handler. */
+/** Handles a selection made in the 3D Viewer. "Legg til vimpel"/"Fjern vimpel" only
+ *  work with exactly one selected element (see updateActionButtons), but "Fargelegg"
+ *  supports any number — so this resolves GUID/name for every selected element, not
+ *  just the first, batched per model for fewer API round-trips. Mirrors the
+ *  "søk armering" extension's origin.isSelf guard so our own setSelection() calls
+ *  don't re-trigger this handler. */
 async function handleViewerSelection(selection) {
   closeVimpelForm();
+  closeFargeForm();
 
   const flat = [];
   for (const item of selection || []) {
@@ -100,32 +123,39 @@ async function handleViewerSelection(selection) {
   }
 
   if (flat.length === 0) {
-    currentSelection = null;
+    currentSelection = [];
     renderSelection();
-    return;
-  }
-  if (flat.length > 1) {
-    currentSelection = null;
-    renderSelection();
-    log(`Valgte ${flat.length} elementer — velg nøyaktig ett element for vimpel-handlinger.`);
     return;
   }
 
-  const { modelId, runtimeId } = flat[0];
+  const byModel = new Map();
+  for (const entry of flat) {
+    if (!byModel.has(entry.modelId)) byModel.set(entry.modelId, []);
+    byModel.get(entry.modelId).push(entry.runtimeId);
+  }
+
   try {
-    const [guid] = await API.viewer.convertToObjectIds(modelId, [runtimeId]);
-    const [props] = await API.viewer.getObjectProperties(modelId, [runtimeId]);
-    currentSelection = {
-      modelId,
-      runtimeId,
-      guid,
-      name: props && props.product && props.product.name,
-      class: props && props.class,
-    };
+    const resolved = [];
+    for (const [modelId, runtimeIds] of byModel.entries()) {
+      const guids = await API.viewer.convertToObjectIds(modelId, runtimeIds);
+      const propsList = await API.viewer.getObjectProperties(modelId, runtimeIds);
+      const propsById = new Map(propsList.map((p) => [p.id, p]));
+      runtimeIds.forEach((runtimeId, i) => {
+        const props = propsById.get(runtimeId);
+        resolved.push({
+          modelId,
+          runtimeId,
+          guid: guids[i],
+          name: props && props.product && props.product.name,
+          class: props && props.class,
+        });
+      });
+    }
+    currentSelection = resolved;
     renderSelection();
-    log(`Valgt element: ${currentSelection.name || currentSelection.class || "(uten navn)"} (${guid})`);
+    log(`Valgt ${resolved.length} element(er): ` + resolved.map(elementLabel).join(", "));
   } catch (err) {
-    currentSelection = null;
+    currentSelection = [];
     renderSelection();
     log("Feil ved henting av GUID/egenskaper for valgt element: " + err.message);
   }
@@ -199,37 +229,84 @@ function clearQueue() {
   renderQueue();
 }
 
+function utfortAv() {
+  return currentUser ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() || currentUser.email : "";
+}
+
 function submitVimpelForm() {
   const merknad = merknadInput.value.trim();
   if (!merknad) {
     merknadInput.focus();
     return;
   }
+  const sel = currentSelection[0];
   const payload = {
     type: "vimpel",
-    guid: currentSelection.guid,
+    guid: sel.guid,
     merknad,
-    utfort_av: currentUser ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() || currentUser.email : "",
+    utfort_av: utfortAv(),
     prosjekt: currentProjectName,
   };
-  const label = `Vimpel: ${currentSelection.name || currentSelection.guid} — "${merknad}"`;
+  const label = `Vimpel: ${elementLabel(sel)} — "${merknad}"`;
   closeVimpelForm();
   addToQueue(payload, label);
 }
 
 function removeVimpel() {
+  const sel = currentSelection[0];
   const payload = {
     type: "fjern-vimpel",
-    guid: currentSelection.guid,
+    guid: sel.guid,
   };
-  const label = `Fjern vimpel: ${currentSelection.name || currentSelection.guid}`;
+  const label = `Fjern vimpel: ${elementLabel(sel)}`;
   addToQueue(payload, label);
+}
+
+function openFargeForm(hex, navn) {
+  pendingFarge = { hex, navn };
+  fargeMerknadInput.value = "";
+  fargeForm.style.display = "block";
+  fargeMerknadInput.focus();
+}
+
+function closeFargeForm() {
+  fargeForm.style.display = "none";
+  pendingFarge = null;
+}
+
+/** Legger én kø-post per valgt element — slik at brukeren kan fjerne enkeltposter
+ *  fra køen senere hvis f.eks. ett av flere elementer ble valgt ved en feil. Alle
+ *  postene deler samme farge og merknad siden de kommer fra samme bekreftelse. */
+function submitFargeForm() {
+  const merknad = fargeMerknadInput.value.trim();
+  if (!merknad) {
+    fargeMerknadInput.focus();
+    return;
+  }
+  const { hex, navn } = pendingFarge;
+  for (const sel of currentSelection) {
+    const payload = {
+      type: "farge",
+      guid: sel.guid,
+      farge: hex,
+      merknad,
+      utfort_av: utfortAv(),
+      prosjekt: currentProjectName,
+    };
+    addToQueue(payload, `Fargelegg (${navn}): ${elementLabel(sel)} — "${merknad}"`);
+  }
+  closeFargeForm();
 }
 
 addBtn.addEventListener("click", openVimpelForm);
 removeBtn.addEventListener("click", removeVimpel);
 formSubmitBtn.addEventListener("click", submitVimpelForm);
 formCancelBtn.addEventListener("click", closeVimpelForm);
+fargeButtons.forEach((btn) => {
+  btn.addEventListener("click", () => openFargeForm(btn.dataset.hex, btn.dataset.navn));
+});
+fargeFormSubmitBtn.addEventListener("click", submitFargeForm);
+fargeFormCancelBtn.addEventListener("click", closeFargeForm);
 queueDownloadBtn.addEventListener("click", downloadQueue);
 queueClearBtn.addEventListener("click", clearQueue);
 

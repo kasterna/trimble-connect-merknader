@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Trimble Connect 3D Viewer side-panel extension ("Merknader") that lets project admins add or remove a **vimpel** (flag marker) annotation on a selected element — replacing today's manual workflow of running a local Flask app (`D:\SOS-Kolbotn\app`) and uploading the result by hand. See [README.md](README.md) for user-facing status and the role-gating explanation.
+A Trimble Connect 3D Viewer side-panel extension ("Merknader") that lets project admins mark elements two ways — add/remove a **vimpel** (flag marker) on a single selected element, or **fargelegge** (color) one or more selected elements with one of 5 standard colors — replacing today's manual workflow of running a local Flask app (`D:\SOS-Kolbotn\app`) and uploading the result by hand. See [README.md](README.md) for user-facing status and the role-gating explanation.
 
 This is a **separate project/repo** from `D:\Trimble connect` ("Søk Armering") — each Trimble Connect extension Kåre builds gets its own repo, its own GitHub Pages URL, and its own manifest.json, even though the frontend skeleton is copied from that project.
 
@@ -12,9 +12,13 @@ This is a **separate project/repo** from `D:\Trimble connect` ("Søk Armering") 
 
 Three ambition levels were scoped out for how the frontend hands off to the ifcopenshell edit (see "Why Nivå 1" below). **Nivå 1 is what's built and current:**
 
-**Frontend (`app.js`):** connects to Trimble Connect, reads the current user's role from the project's own member list, gates the "Legg til vimpel"/"Fjern vimpel" UI to admins, lets an admin pick one element and fill in a merknad, and builds a queue-item payload for both actions — but instead of calling any backend automatically, it **appends the item to an in-page queue list** and lets the user download the whole queue as a `.json` file (`downloadQueue()`). No network call happens at all.
+**Frontend (`app.js`):** connects to Trimble Connect, reads the current user's role from the project's own member list, gates the UI to admins, and supports **two marker types** sharing the same selection/queue infrastructure:
+- **Vimpel** (`add-btn`/`remove-btn`) — requires exactly one selected element.
+- **Fargelegging** (`fargeButtons`, one of 5 preset colors) — works with one or more selected elements; confirming a color adds one queue item per selected element (see `submitFargeForm()`).
 
-**Backend (`backend/`):** the same Flask + `ifcopenshell` service from the earlier Fase 2a work (`backend/app.py`, `backend/ifc_ops.py`) still exists and still works standalone, but is no longer wired to the frontend's "Bekreft" button. The primary tool for Nivå 1 is **`backend/kjor_ko.py`**, a plain CLI that reads a downloaded queue `.json` and a local IFC file and calls the same `ifc_ops.behandle_items()` — no server, no HTTP, just `python kjor_ko.py <ifc_fil> <ko_fil>`.
+Both build a queue-item-shaped payload and call `addToQueue()` — instead of calling any backend automatically, items are **appended to an in-page queue list**, and the user downloads the whole queue as a `.json` file (`downloadQueue()`). No network call happens at all.
+
+**Backend (`backend/`):** the same Flask + `ifcopenshell` service from the earlier Fase 2a work (`backend/app.py`, `backend/ifc_ops.py`) still exists and still works standalone, but is no longer wired to the frontend's "Bekreft" buttons. The primary tool for Nivå 1 is **`backend/kjor_ko.py`**, a plain CLI that reads a downloaded queue `.json` and a local IFC file and calls the same `ifc_ops.behandle_items()` — no server, no HTTP, just `python kjor_ko.py <ifc_fil> <ko_fil>`.
 
 ### Why Nivå 1 (not the original full-automation plan)
 
@@ -29,6 +33,8 @@ Kåre was unsure whether he currently has the organizational access/authority to
 ### How the backend was tested
 
 No Trimble Connect REST API integration exists, so this couldn't be tested against a real TC project. Instead: copied a real model (`D:\SOS-Kolbotn\ifc\arbeidsunderlag\SOS_20KOL_F_RIB.ifc`) to a scratch location and ran both `backend/app.py` (via `curl`, and via `fetch()` from an actual browser context to confirm CORS works) and `backend/kjor_ko.py` against it, then re-opened the result with `ifcopenshell` to check the proxy count and pset contents. Confirmed: add is idempotent (replaces, doesn't duplicate), remove works, pset has all 7 fields on both the vimpel and the source element, and `kjor_ko.py`'s exit code reflects per-item success/failure.
+
+The vimpel edit was also verified visually — a queue item built by the deployed extension in a real TC session was run through `kjor_ko.py` against the actual downloaded IFC file, and the result opened in Solibri showed the flag geometry in place with the correct `NCC-Produksjon` pset values. The `farge` (color) type was verified the same programmatic way as vimpel (`ifcopenshell.by_type("IfcStyledItem")` inspection, RGB values matched the chosen hex) but not yet re-verified visually in a viewer after this addition.
 
 ### How the frontend was verified live (2026-07-06, "Kåre Testmappe" project)
 
@@ -46,17 +52,17 @@ Everything lives in two files, same split as the "Søk Armering" reference proje
 - **`app.js`** — all logic:
   1. `main()` calls `TrimbleConnectWorkspace.connect(window.parent, callback, 30000)` once on load, then `checkRole()`, then fetches `API.project.getProject().name` into `currentProjectName`.
   2. `checkRole()` calls `API.user.getUser()` for the current user's id/email, and `API.project.getMembers()` for the project's member list (each entry has `id`/`email`/`role`/`companyAdmin`). Matches by id first, falls back to a case-insensitive email match — **required** in practice, since `UserAPI.getUser().id` and a member's `id` are different ID namespaces for the same person (confirmed live, see "How the frontend was verified live" below). Sets the module-level `isAdmin` flag from `companyAdmin || /admin/i.test(role)` (confirmed live: `role` comes back as `"ADMIN"`, and `companyAdmin` can be `false` for a real admin, so both checks are needed). Logs the full member list on every run for future diagnosability.
-  3. `handleViewerSelection()` (fed by `viewer.onSelectionChanged`, guarded by `origin.isSelf` exactly like Søk Armering to avoid feedback loops) only accepts a **single** selected element — 0 or >1 clears `currentSelection` and logs why. For exactly one, it calls `viewer.convertToObjectIds()` for the IFC GUID and `viewer.getObjectProperties()` for the display name.
-  4. The vimpel form (`openVimpelForm`/`closeVimpelForm`) collects a required free-text `merknad`.
-  5. `submitVimpelForm()` / `removeVimpel()` build a queue-item-shaped payload (`{type: "vimpel", guid, merknad, utfort_av, prosjekt}` / `{type: "fjern-vimpel", guid}`) and call `addToQueue(payload, label)`.
+  3. `handleViewerSelection()` (fed by `viewer.onSelectionChanged`, guarded by `origin.isSelf` exactly like Søk Armering to avoid feedback loops) resolves **every** selected element into `currentSelection` (an array, possibly empty) — batched per `modelId` (one `convertToObjectIds`/`getObjectProperties` call per model, not per element) and matched back up by the `id` field on each returned `ObjectProperties` entry (not array position — that ordering isn't documented as guaranteed). `updateActionButtons()` gates vimpel actions to `currentSelection.length === 1` and color actions to `length >= 1`.
+  4. The vimpel form (`openVimpelForm`/`closeVimpelForm`) and the farge form (`openFargeForm`/`closeFargeForm`, opened by clicking one of the 5 `.farge-btn` swatches) both collect a required free-text `merknad`.
+  5. `submitVimpelForm()` / `removeVimpel()` build a single queue-item-shaped payload (`{type: "vimpel", guid, merknad, utfort_av, prosjekt}` / `{type: "fjern-vimpel", guid}`) from `currentSelection[0]` and call `addToQueue(payload, label)`. `submitFargeForm()` instead loops over **all** of `currentSelection`, adding one `{type: "farge", guid, farge: hex, merknad, utfort_av, prosjekt}` item per element — so a multi-element color action can still be partially undone from the queue list afterward.
   6. `addToQueue()` pushes to the module-level `queue` array and calls `renderQueue()`, which draws the list (with per-item `×` remove buttons via `removeFromQueue()`) and enables/disables the download/clear buttons.
   7. `downloadQueue()` serializes `queue.map(q => q.item)` to a `Blob` and triggers a browser download (`merknader-ko-<timestamp>.json`) — this is the only "export" mechanism; there is no network call anywhere in this file.
 
 ## Architecture (backend — `backend/`)
 
-- **`backend/ifc_ops.py`** — adapted from `D:\SOS-Kolbotn\app\ifc_ops.py`. `lag_vimpel()` (stang+flagg geometry) is unchanged. `legg_til_ncc_produksjon()` replaces `legg_til_sos_produksjon()`: same 7-field pset shape, but the `Prosjekt`/`Disiplin` values are passed in directly by the caller instead of being read from a `SOS-FELLES` source pset — this project has no such assumption to lean on. `behandle_items()` replaces `kjor_ko_sos()`: no per-file grouping/batching, since each call already targets one file; same atomic temp-file-then-`os.replace()` write.
-- **`backend/kjor_ko.py`** — the Nivå 1 entry point: `python kjor_ko.py <ifc_fil> <ko_fil.json>`. Loads the queue JSON, calls `ifc_ops.behandle_items()`, prints per-item OK/FEIL, exits non-zero if anything failed.
-- **`backend/app.py`** — still present and still works (Flask + CORS, `POST /api/vimpel`, `POST /api/fjern-vimpel`, `GET /api/status`), but nothing in the frontend calls it right now. Kept as the re-enablement point if/when Kåre decides to pursue full automation (see "Why Nivå 1" above).
+- **`backend/ifc_ops.py`** — adapted from `D:\SOS-Kolbotn\app\ifc_ops.py`. `lag_vimpel()` (stang+flagg geometry) and `fargelegg_element()` (direct element coloring — handles both the Tekla/`IfcMappedItem` and Revit/nested-items styling conventions) are ported unchanged. `legg_til_ncc_produksjon()` replaces `legg_til_sos_produksjon()`: same 7-field pset shape, but the `Prosjekt`/`Disiplin` values are passed in directly by the caller instead of being read from a `SOS-FELLES` source pset — this project has no such assumption to lean on. `behandle_items()` replaces `kjor_ko_sos()`: no per-file grouping/batching, since each call already targets one file; dispatches on `item["type"]` (`"vimpel"` / `"fjern-vimpel"` / `"farge"`); same atomic temp-file-then-`os.replace()` write. `_behandle_farge()` writes the pset only to the source element (unlike vimpel, there's no separate proxy object to also write it to).
+- **`backend/kjor_ko.py`** — the Nivå 1 entry point: `python kjor_ko.py <ifc_fil> <ko_fil.json>`. Loads the queue JSON, calls `ifc_ops.behandle_items()`, prints per-item OK/FEIL, exits non-zero if anything failed. Type-agnostic — didn't need changes to support `farge`.
+- **`backend/app.py`** — still present and still works (Flask + CORS, `POST /api/vimpel`, `POST /api/fjern-vimpel`, `POST /api/farge`, `GET /api/status`), but nothing in the frontend calls it right now. Kept as the re-enablement point if/when Kåre decides to pursue full automation (see "Why Nivå 1" above).
 
 ### Mapping from the old SOS-specific convention
 

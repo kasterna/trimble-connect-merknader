@@ -58,6 +58,33 @@ def api_vimpel():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/farge", methods=["POST"])
+def api_farge():
+    d = request.json or {}
+    sti = _ifc_sti(d)
+    if not sti or not os.path.isfile(sti):
+        return jsonify({"error": "IFC-fil ikke funnet (satt via IFC_FIL eller 'ifc_fil' i requesten): " + str(sti)}), 400
+    if not d.get("guid"):
+        return jsonify({"error": "Mangler 'guid'"}), 400
+
+    item = {
+        "type": "farge",
+        "guid": d["guid"],
+        "farge": d.get("farge", "#CC0000"),
+        "merknad": d.get("merknad", ""),
+        "utfort_av": d.get("utfort_av", ""),
+        "disiplin": d.get("disiplin", ""),
+        "prosjekt": d.get("prosjekt", ""),
+        "revisjonsnummer": d.get("revisjonsnummer", ""),
+    }
+    try:
+        resultater = ifc_ops.behandle_items(sti, [item])
+        ok, melding = resultater[0]
+        return jsonify({"ok": ok, "melding": melding}), (200 if ok else 400)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/fjern-vimpel", methods=["POST"])
 def api_fjern_vimpel():
     d = request.json or {}

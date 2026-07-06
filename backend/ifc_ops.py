@@ -67,6 +67,64 @@ def legg_til_ncc_produksjon(model, element, merknad, status, disiplin, prosjekt,
     })
 
 
+def fargelegg_element(model, element, r, g, b):
+    """Fargelegger et elements egen geometri direkte (ingen ny geometri/proxy).
+    Portert uendret fra D:\\SOS-Kolbotn\\app\\ifc_ops.py — håndterer at ulike
+    IFC-eksportverktøy styler geometrien forskjellig:
+    - Revit (RIB): IfcStyledItem på items INNI mapped rep (IfcMappedItem ignoreres)
+    - Tekla (TELE): IfcStyledItem direkte på IfcMappedItem (brep-items ignoreres)
+    Vi styler BEGGE steder for å dekke alle viewere (Solibri, Trimble, etc.).
+    Returnerer (bool, str) — True/"" ved suksess, False/"årsak" ved feil.
+    """
+    if not element.Representation:
+        return False, "Ingen Representation"
+
+    reps = list(element.Representation.Representations or [])
+
+    body = next(
+        (rep for rep in reps
+         if rep.RepresentationIdentifier == "Body" and rep.Items),
+        None,
+    )
+    if body is None:
+        _skip = {"Axis", "FootPrint", "Survey", "CoG", "Profile", "Reference"}
+        body = next(
+            (rep for rep in reps
+             if (rep.RepresentationIdentifier or "") not in _skip and rep.Items),
+            None,
+        )
+
+    if not body:
+        ids = [rep.RepresentationIdentifier for rep in reps]
+        return False, "Ingen body-rep. Tilgjengelige: " + str(ids)
+
+    if not body.Items:
+        return False, "Body-rep har ingen items (id=" + str(body.RepresentationIdentifier) + ")"
+
+    geom_items = []
+    for item in body.Items:
+        if item.is_a("IfcMappedItem"):
+            geom_items.append(item)
+            try:
+                mapped_rep = item.MappingSource.MappedRepresentation
+                if mapped_rep and mapped_rep.Items:
+                    geom_items.extend(mapped_rep.Items)
+            except Exception:
+                pass
+        else:
+            geom_items.append(item)
+
+    if not geom_items:
+        return False, "Ingen geom_items etter IfcMappedItem-traversal"
+
+    for geom_item in geom_items:
+        for si in list(model.by_type("IfcStyledItem")):
+            if si.Item and si.Item.id() == geom_item.id():
+                model.remove(si)
+        _legg_farge(model, geom_item, r, g, b)
+    return True, ""
+
+
 def lag_vimpel(model, element, vx, vy, vz, fr, fg, fb, vimpel_navn):
     """Grå stang + farget flagg, plassert ved (vx, vy, vz) i modellens native enhet.
     Uendret geometri-oppskrift fra dagens SOS-Produksjon ifc_ops.py."""
@@ -187,6 +245,35 @@ def _behandle_fjern_vimpel(model, item):
     return False, "Ingen vimpel funnet for " + guid[:12] + "..."
 
 
+def _behandle_farge(model, item, dato):
+    """item: {guid, farge, merknad, utfort_av, disiplin?, prosjekt?, revisjonsnummer?}
+    Fargelegger elementet direkte (ingen ny geometri) og skriver NCC-Produksjon på det —
+    i motsetning til vimpel er det ingen egen proxy å skrive pset-et på i tillegg."""
+    guid = item.get("guid", "")
+    try:
+        element = model.by_guid(guid)
+    except Exception:
+        element = None
+    if not element:
+        return False, "GUID ikke funnet: " + guid
+
+    farge_hex = item.get("farge") or "#CC0000"
+    utfort_av = item.get("utfort_av", "") or "NCC-Produksjon"
+    merknad   = item.get("merknad", "")
+    disiplin  = item.get("disiplin", "")
+    prosjekt  = item.get("prosjekt", "")
+    revnr     = item.get("revisjonsnummer", "")
+
+    r, g, b = hex_til_rgb(farge_hex)
+    farge_ok, farge_info = fargelegg_element(model, element, r, g, b)
+    if not farge_ok:
+        return False, "Fargelegging feilet: " + farge_info
+
+    legg_til_ncc_produksjon(model, element, merknad, "Apen", disiplin, prosjekt, utfort_av, revnr, dato)
+
+    return True, "Farget " + guid[:12] + "... " + farge_hex
+
+
 def behandle_items(kilde_sti, items, output_sti=None):
     """Åpner IFC-fila på kilde_sti, kjører items ("vimpel" / "fjern-vimpel") i rekkefølge,
     og skriver resultatet atomisk (temp-fil + rename) til output_sti (default: samme fil).
@@ -207,6 +294,8 @@ def behandle_items(kilde_sti, items, output_sti=None):
                 ok, melding = _behandle_vimpel(model, item, dato)
             elif item.get("type") == "fjern-vimpel":
                 ok, melding = _behandle_fjern_vimpel(model, item)
+            elif item.get("type") == "farge":
+                ok, melding = _behandle_farge(model, item, dato)
             else:
                 ok, melding = False, "Ukjent type: " + str(item.get("type"))
         except Exception as e:

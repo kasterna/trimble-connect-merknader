@@ -1,8 +1,11 @@
 # Merknader
 
-En Trimble Connect-extension (side-panel i 3D Viewer) som lar prosjekt-admins legge til eller fjerne en **vimpel**-merknad på et valgt element, uten å gå via en lokal Flask-app og manuell filopplasting.
+En Trimble Connect-extension (side-panel i 3D Viewer) som lar prosjekt-admins merke elementer med to typer merknader, uten å gå via en lokal Flask-app og manuell filopplasting:
 
-En vimpel er en liten IFC-geometri (grå stang + rødt flagg) plassert ved elementet, sammen med et egendefinert pset `NCC-Produksjon` (Merknad, Status, Disiplin, Prosjekt, Utført av, Revisjonsnummer, Revisjonsdato) skrevet på både vimpelen og kildeelementet.
+- **Vimpel** — en liten IFC-geometri (grå stang + rødt flagg) plassert ved ett valgt element
+- **Fargelegging** — fargelegger ett eller flere valgte elementer direkte med én av 5 standardfarger (rød, grønn, gul, blå, oransje), ingen ny geometri
+
+Begge skriver samme egendefinerte pset `NCC-Produksjon` (Merknad, Status, Disiplin, Prosjekt, Utført av, Revisjonsnummer, Revisjonsdato) på elementet (vimpelen skriver i tillegg på selve vimpel-geometrien).
 
 Bygget etter samme mønster som ["Søk Armering"](https://github.com/kasterna/rebar-postliste).
 
@@ -12,9 +15,9 @@ Full automatikk (klikk i Trimble Connect → vimpel skrives → lastes automatis
 
 Denne extensionen kan i dag:
 - Koble seg til Trimble Connect og lese hvilken rolle innlogget bruker har i prosjektet (`ProjectAPI.getMembers()` + `UserAPI.getUser()`), og vise/skjule handlinger deretter.
-- La en admin velge ett element i 3D-vieweren, og fylle ut en merknad i skjemaet "Legg til vimpel".
-- Bygge riktig payload for både "Legg til vimpel" og "Fjern vimpel", og legge dem i en **kø-liste i panelet** (kan bygges opp over flere elementer i samme økt, fjerne enkeltposter, eller tømme alt).
-- **Laste ned køen** som en `.json`-fil, klar til å kjøres lokalt med [backend/kjor_ko.py](backend/kjor_ko.py) (Flask+ifcopenshell-logikken som faktisk skriver vimpel-geometrien og `NCC-Produksjon`-pset-et — testet lokalt mot ekte SOS-Kolbotn-modeller).
+- La en admin velge **ett** element for vimpel-handlinger ("Legg til vimpel"/"Fjern vimpel"), eller **ett eller flere** elementer for fargelegging.
+- Bygge riktig payload for alle tre handlingene, og legge dem i en **kø-liste i panelet** (kan bygges opp over flere elementer/valg i samme økt, fjerne enkeltposter, eller tømme alt). Fargelegging av flere elementer på én gang legger én kø-post per element, slik at hver kan fjernes for seg.
+- **Laste ned køen** som en `.json`-fil, klar til å kjøres lokalt med [backend/kjor_ko.py](backend/kjor_ko.py) (ifcopenshell-logikken som faktisk skriver vimpel-geometrien/fargeleggingen og `NCC-Produksjon`-pset-et — testet lokalt mot ekte SOS-Kolbotn-modeller, og vimpel-delen også verifisert visuelt i Solibri).
 
 Det som fortsatt er manuelt (som i dag med `D:\SOS-Kolbotn\app`):
 - Laste ned IFC-filen fra Trimble Connect
