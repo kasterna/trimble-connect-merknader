@@ -1,0 +1,7 @@
+{
+  "title": "Merknader",
+  "description": "Legg til eller fjern vimpel-merknader (NCC-Produksjon) på elementer direkte fra 3D Viewer.",
+  "url": "https://kasterna.github.io/trimble-connect-merknader/index.html",
+  "icon": "https://kasterna.github.io/trimble-connect-merknader/icon.svg",
+  "enabled": true
+}
