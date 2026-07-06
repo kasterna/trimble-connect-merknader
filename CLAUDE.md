@@ -8,7 +8,7 @@ A Trimble Connect 3D Viewer side-panel extension ("Merknader") that lets project
 
 This is a **separate project/repo** from `D:\Trimble connect` ("Søk Armering") — each Trimble Connect extension Kåre builds gets its own repo, its own GitHub Pages URL, and its own manifest.json, even though the frontend skeleton is copied from that project.
 
-## Current status: Nivå 1 (queue export, no server/OAuth) — done
+## Current status: Nivå 1 (queue export, no server/OAuth) — done and verified live in a real Trimble Connect project (2026-07-06)
 
 Three ambition levels were scoped out for how the frontend hands off to the ifcopenshell edit (see "Why Nivå 1" below). **Nivå 1 is what's built and current:**
 
@@ -30,6 +30,14 @@ Kåre was unsure whether he currently has the organizational access/authority to
 
 No Trimble Connect REST API integration exists, so this couldn't be tested against a real TC project. Instead: copied a real model (`D:\SOS-Kolbotn\ifc\arbeidsunderlag\SOS_20KOL_F_RIB.ifc`) to a scratch location and ran both `backend/app.py` (via `curl`, and via `fetch()` from an actual browser context to confirm CORS works) and `backend/kjor_ko.py` against it, then re-opened the result with `ifcopenshell` to check the proxy count and pset contents. Confirmed: add is idempotent (replaces, doesn't duplicate), remove works, pset has all 7 fields on both the vimpel and the source element, and `kjor_ko.py`'s exit code reflects per-item success/failure.
 
+### How the frontend was verified live (2026-07-06, "Kåre Testmappe" project)
+
+Deployed to GitHub Pages and added as a Custom Extension in a real Trimble Connect project. This surfaced a real bug the local-only testing couldn't catch: `checkRole()`'s original `members.find((m) => m.id === currentUser.id)` never matched, even for an actual project admin. Debugging via the browser's DevTools console (reading `document.getElementById('log').textContent` in the extension's iframe — not the TC host page, which has its own unrelated console noise) showed why: `UserAPI.getUser().id` (a global Trimble Identity UUID, e.g. `8a0c0e7a-a2d8-4203-a7db-4dcc98ae4961`) and `ProjectAPI.getMembers()[].id` (e.g. `JmBBHSsdFKY`) are **two different ID namespaces** for the same person — confirmed by matching email addresses across both. Fixed by falling back to a case-insensitive email match (see `checkRole()` below), and by logging the full member list on every run rather than just the current user's outcome, so any future mismatch is diagnosable without re-guessing.
+
+Also confirmed live: `role` comes back as the string `"ADMIN"` (not e.g. `"admin"` or a numeric code) and `companyAdmin` can be `false` even for a genuine project admin — so the `isAdmin` check needs both the `companyAdmin` flag and the `role` regex match; neither alone is reliable for every user. With the email-fallback fix deployed, the full flow (connect → role check → admin buttons enabled → element selection resolves GUID/name → add/remove to queue → download `.json`) was confirmed working end-to-end in the real TC session.
+
+**Gotcha for next time:** GitHub Pages caches assets for ~15 minutes (`Expires` header). After pushing a fix, a hard refresh of the *whole Trimble Connect browser tab* (Ctrl+Shift+R) is needed before re-testing — reloading just the extension panel isn't enough, since the iframe's cached `app.js` can still be served from the browser's HTTP cache.
+
 ## Architecture (frontend)
 
 Everything lives in two files, same split as the "Søk Armering" reference project:
@@ -37,7 +45,7 @@ Everything lives in two files, same split as the "Søk Armering" reference proje
 - **`index.html`** — markup, inline `<style>`, loads `vendor/trimbleconnect.workspace.api.js` then `app.js`.
 - **`app.js`** — all logic:
   1. `main()` calls `TrimbleConnectWorkspace.connect(window.parent, callback, 30000)` once on load, then `checkRole()`, then fetches `API.project.getProject().name` into `currentProjectName`.
-  2. `checkRole()` calls `API.user.getUser()` for the current user's id, and `API.project.getMembers()` for the project's member list (each entry has `role`/`companyAdmin`). Matches by id, sets the module-level `isAdmin` flag. **The exact `role` string values from a live project are unverified** — the raw value is logged on every run so it can be calibrated against real Trimble Connect data (same "can only really be tested inside TC" constraint as the rest of this app).
+  2. `checkRole()` calls `API.user.getUser()` for the current user's id/email, and `API.project.getMembers()` for the project's member list (each entry has `id`/`email`/`role`/`companyAdmin`). Matches by id first, falls back to a case-insensitive email match — **required** in practice, since `UserAPI.getUser().id` and a member's `id` are different ID namespaces for the same person (confirmed live, see "How the frontend was verified live" below). Sets the module-level `isAdmin` flag from `companyAdmin || /admin/i.test(role)` (confirmed live: `role` comes back as `"ADMIN"`, and `companyAdmin` can be `false` for a real admin, so both checks are needed). Logs the full member list on every run for future diagnosability.
   3. `handleViewerSelection()` (fed by `viewer.onSelectionChanged`, guarded by `origin.isSelf` exactly like Søk Armering to avoid feedback loops) only accepts a **single** selected element — 0 or >1 clears `currentSelection` and logs why. For exactly one, it calls `viewer.convertToObjectIds()` for the IFC GUID and `viewer.getObjectProperties()` for the display name.
   4. The vimpel form (`openVimpelForm`/`closeVimpelForm`) collects a required free-text `merknad`.
   5. `submitVimpelForm()` / `removeVimpel()` build a queue-item-shaped payload (`{type: "vimpel", guid, merknad, utfort_av, prosjekt}` / `{type: "fjern-vimpel", guid}`) and call `addToQueue(payload, label)`.
@@ -62,7 +70,7 @@ Everything lives in two files, same split as the "Søk Armering" reference proje
 ## Deployment / testing loop
 
 Same pattern as `D:\Trimble connect`:
-- `manifest.json.url`/`.icon` will point at GitHub Pages once a repo exists (`https://kasterna.github.io/trimble-connect-merknader/...` — placeholder until the actual repo is created). Trimble Connect fetches `manifest.json` once when an admin adds the Custom Extension; it does not auto-refresh on file changes.
+- Repo: `https://github.com/kasterna/trimble-connect-merknader` (public, default branch `master` — GitHub Desktop named it that on publish, not `main`). Hosted on GitHub Pages at `https://kasterna.github.io/trimble-connect-merknader/`, which is what `manifest.json`'s `url`/`icon` point at. Trimble Connect fetches `manifest.json` once when an admin adds the Custom Extension; it does not auto-refresh on file changes.
 - GitHub Pages free tier requires the repo to stay **public**.
-- This machine has **no `gh` CLI** — pushing is done through GitHub Desktop by the user. After committing locally, tell the user to push via GitHub Desktop and wait ~1 minute for Pages to rebuild before re-testing in Trimble Connect.
-- `npm run dev` only proves the page loads without JS errors. Functional testing (role gating, selection, form) requires reloading the extension panel inside an actual Trimble Connect project.
+- This machine has **no `gh` CLI** — pushing is done through GitHub Desktop by the user. After committing locally, tell the user to push via GitHub Desktop and wait ~1 minute for Pages to rebuild before re-testing in Trimble Connect. GitHub Pages then caches assets for ~15 minutes on top of that — see the live-verification gotcha above.
+- `npm run dev` only proves the page loads without JS errors. Functional testing (role gating, selection, form) requires reloading the extension panel inside an actual Trimble Connect project — now done once, see "How the frontend was verified live" above.

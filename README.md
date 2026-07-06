@@ -6,7 +6,7 @@ En vimpel er en liten IFC-geometri (grå stang + rødt flagg) plassert ved eleme
 
 Bygget etter samme mønster som ["Søk Armering"](https://github.com/kasterna/rebar-postliste).
 
-## Status: Nivå 1 (kø-eksport, ingen server/OAuth)
+## Status: Nivå 1 (kø-eksport, ingen server/OAuth) — verifisert i en ekte Trimble Connect-økt
 
 Full automatikk (klikk i Trimble Connect → vimpel skrives → lastes automatisk opp som ny fil-versjon) krever et Trimble Connect REST API-oppsett med OAuth-registrering og en alltid-på server — se `CLAUDE.md` for hvorfor. Siden det er usikkert om/når det er tilgjengelig, er extensionen bygget for en enklere, men fortsatt nyttig arbeidsflyt uten noe av det:
 
@@ -21,11 +21,13 @@ Det som fortsatt er manuelt (som i dag med `D:\SOS-Kolbotn\app`):
 - Kjøre `kjor_ko.py` lokalt mot fila + kø-fila
 - Laste opp den redigerte fila som ny versjon i Trimble Connect sitt eget grensesnitt
 
+**Testet 2026-07-06 i et ekte prosjekt ("Kåre Testmappe"):** tilkobling, rollesjekk (admin-tilgang riktig gjenkjent), elementvalg, kø-bygging og nedlasting av kø-fil fungerte alle som forventet — se `CLAUDE.md` for detaljene rundt rollesjekk-kalibreringen som måtte til.
+
 Se `CLAUDE.md` for hva som skal til for å gå videre til full automatikk, og hvorfor det ble utsatt.
 
 ## Rollestyring
 
-Ingen eget innloggingssystem. Extensionen leser gjeldende brukers rolle direkte fra Trimble Connect sin egen prosjekt-medlemsliste (`role`/`companyAdmin` per medlem). Alle andre enn admins får skrivebeskyttet visning (handlingsknappene er skjult/deaktivert, og en gul merknad forklarer hvorfor).
+Ingen eget innloggingssystem. Extensionen leser gjeldende brukers rolle direkte fra Trimble Connect sin egen prosjekt-medlemsliste (`role`/`companyAdmin` per medlem), og faller tilbake på e-post-matching siden `UserAPI.getUser().id` og medlemslistens `id` viste seg å være to ulike ID-namespace i praksis (bekreftet i en ekte test). Alle andre enn admins får skrivebeskyttet visning (handlingsknappene er skjult/deaktivert, og en gul merknad forklarer hvorfor).
 
 ## Kjent begrensning (akseptert for v1)
 
