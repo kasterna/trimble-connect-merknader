@@ -11,20 +11,18 @@ const vimpelForm = document.getElementById("vimpel-form");
 const merknadInput = document.getElementById("merknad-input");
 const formSubmitBtn = document.getElementById("form-submit-btn");
 const formCancelBtn = document.getElementById("form-cancel-btn");
-
-// Fase 2 backend (D:\Trimble Connect-prosjekter\Trimble Connect Merknader\backend):
-// kjører kun ifcopenshell-logikken mot én lokalt konfigurert IFC-fil ennå — Trimble
-// Connect REST API-integrasjonen (nedlasting/opplasting av ekte fil-versjoner, som
-// krever en egen OAuth-app) er ikke bygget. Fungerer derfor kun når begge kjører
-// lokalt (http mot http); når extensionen kjøres fra GitHub Pages (https) inni ekte
-// Trimble Connect, må BACKEND_URL peke på en ekte, alltid-på HTTPS-backend i stedet.
-const BACKEND_URL = "http://localhost:5003";
+const queueEmptyEl = document.getElementById("queue-empty");
+const queueListEl = document.getElementById("queue-list");
+const queueCountEl = document.getElementById("queue-count");
+const queueDownloadBtn = document.getElementById("queue-download-btn");
+const queueClearBtn = document.getElementById("queue-clear-btn");
 
 let API = null;
 let isAdmin = false;
 let currentUser = null; // { id, firstName, lastName, email }
 let currentProjectName = "";
 let currentSelection = null; // { modelId, runtimeId, guid, name, class }
+let queue = []; // { item, label } — item matches backend/ifc_ops.py's queue-item shape
 
 function log(msg) {
   const time = new Date().toLocaleTimeString();
@@ -135,34 +133,65 @@ function closeVimpelForm() {
   vimpelForm.style.display = "none";
 }
 
-/** Poster payloaden til Fase 2-backend-en (se backend/app.py), som kjører selve
- *  IFC-endringen med ifcopenshell mot en lokalt konfigurert fil og skriver den atomisk
- *  tilbake. Payload-formatet matcher kø-item-formatet i
- *  D:\SOS-Kolbotn\app\ifc_ops.py / backend/ifc_ops.py (behandle_items).
- *  Trimble Connect REST API-integrasjonen (ekte nedlasting/opplasting av fil-versjoner
- *  fra selve TC-prosjektet) er ikke bygget ennå — se BACKEND_URL-kommentaren øverst. */
-async function postToBackend(payload) {
-  const endpoint = payload.type === "vimpel" ? "/api/vimpel" : "/api/fjern-vimpel";
-  setStatus("Sender til backend...", "busy");
-  try {
-    const res = await fetch(BACKEND_URL + endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || data.melding || `Backend svarte ${res.status}`);
-    }
-    setStatus("Tilkoblet Trimble Connect ✔", "ok");
-    log("Backend OK: " + data.melding);
-  } catch (err) {
-    setStatus("Feil fra backend ✘", "error");
-    log("Feil ved kall til backend (" + endpoint + "): " + err.message);
-  }
+/** Legger en payload i den lokale køen i stedet for å sende den til en backend.
+ *  Automatisk opplasting til Trimble Connect er ikke bygget (se CLAUDE.md, "Nivå 1"):
+ *  dette krever ingen server eller OAuth. Payload-formatet matcher kø-item-formatet i
+ *  backend/ifc_ops.py sin behandle_items() — "Last ned kø" gir en .json du kjører
+ *  lokalt med backend/kjor_ko.py mot en nedlastet kopi av IFC-fila. */
+function addToQueue(item, label) {
+  queue.push({ item, label });
+  renderQueue();
+  log("Lagt i kø: " + label);
 }
 
-async function submitVimpelForm() {
+function removeFromQueue(index) {
+  queue.splice(index, 1);
+  renderQueue();
+}
+
+function renderQueue() {
+  queueListEl.innerHTML = "";
+  const isEmpty = queue.length === 0;
+  queueEmptyEl.style.display = isEmpty ? "block" : "none";
+  queueDownloadBtn.disabled = isEmpty;
+  queueClearBtn.disabled = isEmpty;
+  queueCountEl.textContent = String(queue.length);
+
+  queue.forEach(({ label }, index) => {
+    const li = document.createElement("li");
+    const span = document.createElement("span");
+    span.className = "queue-label";
+    span.textContent = label;
+    span.title = label;
+    const removeBtnEl = document.createElement("button");
+    removeBtnEl.textContent = "×";
+    removeBtnEl.title = "Fjern fra kø";
+    removeBtnEl.addEventListener("click", () => removeFromQueue(index));
+    li.appendChild(span);
+    li.appendChild(removeBtnEl);
+    queueListEl.appendChild(li);
+  });
+}
+
+function downloadQueue() {
+  const items = queue.map((q) => q.item);
+  const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  a.href = url;
+  a.download = `merknader-ko-${stamp}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  log(`Lastet ned kø med ${items.length} post(er).`);
+}
+
+function clearQueue() {
+  queue = [];
+  renderQueue();
+}
+
+function submitVimpelForm() {
   const merknad = merknadInput.value.trim();
   if (!merknad) {
     merknadInput.focus();
@@ -175,22 +204,26 @@ async function submitVimpelForm() {
     utfort_av: currentUser ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() || currentUser.email : "",
     prosjekt: currentProjectName,
   };
+  const label = `Vimpel: ${currentSelection.name || currentSelection.guid} — "${merknad}"`;
   closeVimpelForm();
-  await postToBackend(payload);
+  addToQueue(payload, label);
 }
 
-async function removeVimpel() {
+function removeVimpel() {
   const payload = {
     type: "fjern-vimpel",
     guid: currentSelection.guid,
   };
-  await postToBackend(payload);
+  const label = `Fjern vimpel: ${currentSelection.name || currentSelection.guid}`;
+  addToQueue(payload, label);
 }
 
 addBtn.addEventListener("click", openVimpelForm);
 removeBtn.addEventListener("click", removeVimpel);
 formSubmitBtn.addEventListener("click", submitVimpelForm);
 formCancelBtn.addEventListener("click", closeVimpelForm);
+queueDownloadBtn.addEventListener("click", downloadQueue);
+queueClearBtn.addEventListener("click", clearQueue);
 
 async function main() {
   try {

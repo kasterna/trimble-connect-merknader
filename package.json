@@ -4,7 +4,7 @@
   "description": "Trimble Connect-extension for å legge til/fjerne vimpel-merknader (NCC-Produksjon pset) direkte fra 3D Viewer.",
   "main": "index.js",
   "scripts": {
-    "dev": "http-server -p 8081 --cors",
+    "dev": "http-server -p 8081 --cors -c-1",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

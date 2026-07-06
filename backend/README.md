@@ -1,29 +1,33 @@
-# Merknader-backend (Fase 2a)
+# Merknader-backend
 
-Flask-tjeneste som utfører selve IFC-endringen med `ifcopenshell`: legger til/fjerner en vimpel (grå stang + rødt flagg) og skriver `NCC-Produksjon`-pset-et, adaptert fra `D:\SOS-Kolbotn\app\ifc_ops.py` (se `CLAUDE.md` i prosjektroten for mapping-tabellen).
+`ifcopenshell`-logikken som utfører selve IFC-endringen: legger til/fjerner en vimpel (grå stang + rødt flagg) og skriver `NCC-Produksjon`-pset-et, adaptert fra `D:\SOS-Kolbotn\app\ifc_ops.py` (se `CLAUDE.md` i prosjektroten for mapping-tabellen).
 
-## Hva som IKKE er bygget ennå
+## Nivå 1: `kjor_ko.py` (bruk denne)
 
-Denne tjenesten opererer på **én lokalt konfigurert IFC-fil** — den henter ikke filen fra og laster ikke opp til et Trimble Connect-prosjekt. Det krever Trimble Connect sitt REST API (egen OAuth-app-registrering) og et valgt hostingmiljø for tjenesten (må være HTTPS for å kunne kalles fra en GitHub Pages-hostet extension inni ekte Trimble Connect — `localhost` fungerer kun når begge deler kjøres lokalt på samme maskin). Ingen av delene er besluttet ennå.
-
-## Lokal test
+Extensionen laster ned en kø-fil (`.json`) i stedet for å kalle noe automatisk — se prosjektets `CLAUDE.md` for hvorfor. Denne CLI-en kjører køen mot en lokal IFC-fil, uten server:
 
 ```bash
 pip install -r requirements.txt
+python kjor_ko.py <sti-til-ifc-fil> <sti-til-ko.json>
+```
+
+Skriver resultatet atomisk tilbake til samme IFC-fil (temp-fil + rename). **Bruk en kopi av fila, ikke originalen fra Trimble Connect.** Etterpå: last opp den redigerte fila som ny versjon i Trimble Connect sitt eget grensesnitt, manuelt.
+
+Eksempel på en kø-fil (samme format som extensionen laster ned):
+```json
+[
+  { "type": "vimpel", "guid": "2fj8RrypX5JBqbfcwCdi9v", "merknad": "Sjekk fundament før støp", "utfort_av": "Kåre Sternang", "prosjekt": "SOS Kolbotn" },
+  { "type": "fjern-vimpel", "guid": "29stQzX3z7sRMTx7Rx8N5i" }
+]
+```
+
+Verifisert manuelt mot ekte SOS-Kolbotn-modeller (`D:\SOS-Kolbotn\ifc\arbeidsunderlag\*.ifc`): vimpel-geometri + pset skrives riktig på både vimpel og kildeelement, gjentatt "legg til" er idempotent (erstatter, dobler ikke opp), "fjern" fjerner riktig proxy, og feil i enkeltposter (f.eks. ugyldig GUID) rapporteres per post uten å stoppe resten av køen.
+
+## `app.py` (ikke i bruk fra extensionen akkurat nå)
+
+En Flask-tjeneste med samme logikk bak `POST /api/vimpel` / `POST /api/fjern-vimpel` / `GET /api/status`, som opererer på én lokalt konfigurert fil (`IFC_FIL`-miljøvariabel eller `ifc_fil` i requesten). Bygget for en tidligere ambisjon om at extensionen skulle kalle en backend automatisk over HTTP — ikke koblet til noe i frontend nå, men fungerer fortsatt og er utgangspunktet hvis dere senere går videre til full automatikk (se `CLAUDE.md`, "Why Nivå 1").
+
+```bash
 set IFC_FIL=C:\sti\til\en\kopi.ifc   # PowerShell: $env:IFC_FIL = "..."
 python app.py
 ```
-
-Server kjører på `http://localhost:5003`.
-
-```
-GET  /api/status        – viser hvilken fil som er konfigurert
-POST /api/vimpel         { "guid": "...", "merknad": "...", "utfort_av": "...", "disiplin": "", "prosjekt": "", "revisjonsnummer": "", "flagg_farge": "#CC0000" }
-POST /api/fjern-vimpel   { "guid": "..." }
-```
-
-`ifc_fil` kan også sendes med i hver request-body for å overstyre `IFC_FIL`.
-
-**Bruk en kopi av IFC-filen, ikke originalen** — endringen skrives atomisk tilbake til samme fil (temp-fil + rename), akkurat som dagens SOS-Produksjon-app.
-
-Verifisert manuelt mot ekte SOS-Kolbotn-modeller (`D:\SOS-Kolbotn\ifc\arbeidsunderlag\*.ifc`): vimpel-geometri + pset skrives riktig på både vimpel og kildeelement, gjentatt "legg til" er idempotent (erstatter, dobler ikke opp), og "fjern" fjerner riktig proxy.

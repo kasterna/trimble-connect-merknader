@@ -4,7 +4,7 @@
     {
       "name": "merknader-dev",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["http-server", "-p", "8081", "--cors"],
+      "runtimeArgs": ["http-server", "-p", "8081", "--cors", "-c-1"],
       "port": 8081
     }
   ]

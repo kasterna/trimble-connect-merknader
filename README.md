@@ -6,16 +6,22 @@ En vimpel er en liten IFC-geometri (grå stang + rødt flagg) plassert ved eleme
 
 Bygget etter samme mønster som ["Søk Armering"](https://github.com/kasterna/rebar-postliste).
 
-## Status: Fase 1 (frontend) og Fase 2a (backend-logikk) ferdig, Fase 2b (Trimble Connect REST API) ikke startet
+## Status: Nivå 1 (kø-eksport, ingen server/OAuth)
+
+Full automatikk (klikk i Trimble Connect → vimpel skrives → lastes automatisk opp som ny fil-versjon) krever et Trimble Connect REST API-oppsett med OAuth-registrering og en alltid-på server — se `CLAUDE.md` for hvorfor. Siden det er usikkert om/når det er tilgjengelig, er extensionen bygget for en enklere, men fortsatt nyttig arbeidsflyt uten noe av det:
 
 Denne extensionen kan i dag:
 - Koble seg til Trimble Connect og lese hvilken rolle innlogget bruker har i prosjektet (`ProjectAPI.getMembers()` + `UserAPI.getUser()`), og vise/skjule handlinger deretter.
 - La en admin velge ett element i 3D-vieweren, og fylle ut en merknad i skjemaet "Legg til vimpel".
-- Bygge riktig payload for både "Legg til vimpel" og "Fjern vimpel", og poste den til [backend/app.py](backend/app.py).
-- Backend-en (Flask + ifcopenshell, se [backend/README.md](backend/README.md)) skriver faktisk vimpel-geometrien og `NCC-Produksjon`-pset-et til en IFC-fil, atomisk. Testet lokalt mot ekte SOS-Kolbotn-modeller: idempotent gjentatt tillegg (erstatter, dobler ikke opp) og fjerning verifisert.
+- Bygge riktig payload for både "Legg til vimpel" og "Fjern vimpel", og legge dem i en **kø-liste i panelet** (kan bygges opp over flere elementer i samme økt, fjerne enkeltposter, eller tømme alt).
+- **Laste ned køen** som en `.json`-fil, klar til å kjøres lokalt med [backend/kjor_ko.py](backend/kjor_ko.py) (Flask+ifcopenshell-logikken som faktisk skriver vimpel-geometrien og `NCC-Produksjon`-pset-et — testet lokalt mot ekte SOS-Kolbotn-modeller).
 
-Den kan **ikke** ennå:
-- Hente/laste opp den faktiske filen fra/til et Trimble Connect-prosjekt. Backend-en opererer kun på én lokalt konfigurert IFC-fil (`IFC_FIL`-miljøvariabel eller `ifc_fil` i requesten). Ekte integrasjon krever Trimble Connect sitt REST API (OAuth-app-registrering) og et valgt hostingmiljø — ingen av delene er besluttet ennå, se `CLAUDE.md`.
+Det som fortsatt er manuelt (som i dag med `D:\SOS-Kolbotn\app`):
+- Laste ned IFC-filen fra Trimble Connect
+- Kjøre `kjor_ko.py` lokalt mot fila + kø-fila
+- Laste opp den redigerte fila som ny versjon i Trimble Connect sitt eget grensesnitt
+
+Se `CLAUDE.md` for hva som skal til for å gå videre til full automatikk, og hvorfor det ble utsatt.
 
 ## Rollestyring
 
@@ -41,17 +47,17 @@ npm run dev   # http-server på :8081 med --cors
 
 Åpne `http://localhost:8081`. Som med "Søk Armering" gir dette kun en "laster uten feil"-sjekk — `WorkspaceAPI.connect()`, rollesjekk og elementvalg krever at siden faktisk kjører som iframe inni Trimble Connect.
 
-**Obs (dev-cache):** `http-server` sender `cache-control: max-age=3600`. Etter å ha endret `app.js` må du hard-refreshe (Ctrl+Shift+R) eller åpne i et privat vindu — ellers får du den gamle fila fra nettleser-cachen selv etter en vanlig reload.
+`npm run dev` kjører nå med `-c-1` (deaktivert cache), nettopp fordi `http-server`s standard `cache-control: max-age=3600` ellers gjør at endringer i `app.js` ikke vises selv etter vanlig reload — hard-refresh (Ctrl+Shift+R) hvis du likevel ser gammel oppførsel.
 
-For å teste hele kjeden lokalt (frontend → backend → IFC-fil), kjør backend-en også — se [backend/README.md](backend/README.md).
+For å kjøre en nedlastet kø mot en IFC-fil lokalt, se [backend/README.md](backend/README.md).
 
 ## Prosjektstruktur
 
 ```
 index.html    – markup og styling
-app.js        – all logikk (tilkobling, rollesjekk, valg, skjema, backend-kall)
+app.js        – all logikk (tilkobling, rollesjekk, valg, skjema, kø-bygging/nedlasting)
 manifest.json – Trimble Connect extension-manifest
 icon.svg      – ikon (forstørrelsesglass + vimpel)
 vendor/       – lokal kopi av trimble-connect-workspace-api (IIFE-bygg)
-backend/      – Flask + ifcopenshell-tjeneste som utfører selve IFC-endringen (Fase 2a, se backend/README.md)
+backend/      – ifcopenshell-logikken som utfører selve IFC-endringen, kjørt lokalt (se backend/README.md)
 ```

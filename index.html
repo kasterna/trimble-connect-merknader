@@ -110,6 +110,56 @@
       cursor: pointer;
     }
 
+    #queue-box {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+      background: #fafafa;
+    }
+    #queue-box h2 {
+      font-size: 13px;
+      margin: 0 0 6px 0;
+    }
+    #queue-empty {
+      color: #888;
+      font-style: italic;
+    }
+    #queue-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    #queue-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 4px 0;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    #queue-list li:last-child {
+      border-bottom: none;
+    }
+    #queue-list .queue-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #queue-list button {
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    #queue-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #queue-actions button {
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+
     #log {
       display: none;
       white-space: pre-wrap;
@@ -149,6 +199,16 @@
     <div class="form-actions">
       <button id="form-submit-btn">Bekreft</button>
       <button id="form-cancel-btn">Avbryt</button>
+    </div>
+  </div>
+
+  <div id="queue-box">
+    <h2>Kø (eksporteres, prosesseres lokalt senere)</h2>
+    <div id="queue-empty" class="queue-empty">Tom. Legg til/fjern en vimpel for å legge den i køen.</div>
+    <ul id="queue-list"></ul>
+    <div id="queue-actions">
+      <button id="queue-download-btn" disabled>Last ned kø (<span id="queue-count">0</span>)</button>
+      <button id="queue-clear-btn" disabled>Tøm kø</button>
     </div>
   </div>
 
