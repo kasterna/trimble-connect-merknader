@@ -44,7 +44,15 @@ async function checkRole() {
   try {
     currentUser = await API.user.getUser();
     const members = await API.project.getMembers();
-    const me = members.find((m) => m.id === currentUser.id);
+    log(
+      `Rolle-sjekk debug: currentUser.id=${currentUser.id}, currentUser.email=${currentUser.email}. ` +
+        `Medlemsliste (${members.length}): ` +
+        members.map((m) => `[id=${m.id}, email=${m.email}, role=${m.role}, companyAdmin=${m.companyAdmin}]`).join(", ")
+    );
+    const emailLower = (currentUser.email || "").toLowerCase();
+    const me =
+      members.find((m) => m.id === currentUser.id) ||
+      members.find((m) => (m.email || "").toLowerCase() === emailLower);
     isAdmin = !!(me && (me.companyAdmin || (me.role && /admin/i.test(me.role))));
     log(
       `Rolle-sjekk: bruker=${currentUser.email || currentUser.id}, ` +
