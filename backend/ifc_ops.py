@@ -199,7 +199,15 @@ def _behandle_vimpel(model, item, dato):
 
     koord = item.get("koordinater")
     if koord and all(koord.get(k) is not None for k in ("x", "y", "z")):
-        vx, vy, vz = float(koord["x"]), float(koord["y"]), float(koord["z"])
+        # Frontend sender koordinatene i millimeter (Trimble Connects eget visningsformat
+        # i koordinat-HUD-en), uavhengig av modellens native IFC-lengdeenhet. Konverter
+        # mm -> native enhet med samme skalafaktor som brukes for den automatiske
+        # senter-av-objekt-beregningen (1000 for mm-modeller, 1 for meter-modeller),
+        # delt på 1000 for å gå fra mm til modellens enhet.
+        s = hent_skalafaktor(model)
+        vx = float(koord["x"]) * s / 1000.0
+        vy = float(koord["y"]) * s / 1000.0
+        vz = float(koord["z"]) * s / 1000.0
     else:
         # create_shape returnerer alltid i SI-meter (ifcopenshell normaliserer internt).
         # Bruk verdskoordinater og konverter til modellens native eining (mm for Revit/RIB).
