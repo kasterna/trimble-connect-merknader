@@ -9,6 +9,11 @@ const addBtn = document.getElementById("add-btn");
 const removeBtn = document.getElementById("remove-btn");
 const vimpelForm = document.getElementById("vimpel-form");
 const merknadInput = document.getElementById("merknad-input");
+const vimpelCoordToggle = document.getElementById("vimpel-coord-toggle");
+const vimpelCoordFields = document.getElementById("vimpel-coord-fields");
+const vimpelXInput = document.getElementById("vimpel-x-input");
+const vimpelYInput = document.getElementById("vimpel-y-input");
+const vimpelZInput = document.getElementById("vimpel-z-input");
 const formSubmitBtn = document.getElementById("form-submit-btn");
 const formCancelBtn = document.getElementById("form-cancel-btn");
 const queueEmptyEl = document.getElementById("queue-empty");
@@ -163,12 +168,22 @@ async function handleViewerSelection(selection) {
 
 function openVimpelForm() {
   merknadInput.value = "";
+  vimpelCoordToggle.checked = false;
+  vimpelXInput.value = "";
+  vimpelYInput.value = "";
+  vimpelZInput.value = "";
+  vimpelCoordFields.style.display = "none";
   vimpelForm.style.display = "block";
   merknadInput.focus();
 }
 
 function closeVimpelForm() {
   vimpelForm.style.display = "none";
+}
+
+function toggleVimpelCoordFields() {
+  vimpelCoordFields.style.display = vimpelCoordToggle.checked ? "flex" : "none";
+  if (vimpelCoordToggle.checked) vimpelXInput.focus();
 }
 
 /** Legger en payload i den lokale køen i stedet for å sende den til en backend.
@@ -239,6 +254,18 @@ function submitVimpelForm() {
     merknadInput.focus();
     return;
   }
+  let koordinater = null;
+  if (vimpelCoordToggle.checked) {
+    const x = parseFloat(vimpelXInput.value);
+    const y = parseFloat(vimpelYInput.value);
+    const z = parseFloat(vimpelZInput.value);
+    if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(z)) {
+      log("Ugyldige koordinater — fyll ut X, Y og Z (mm), eller fjern haken for å bruke senter av objekt.");
+      (Number.isNaN(x) ? vimpelXInput : Number.isNaN(y) ? vimpelYInput : vimpelZInput).focus();
+      return;
+    }
+    koordinater = { x, y, z };
+  }
   const sel = currentSelection[0];
   const payload = {
     type: "vimpel",
@@ -247,7 +274,10 @@ function submitVimpelForm() {
     utfort_av: utfortAv(),
     prosjekt: currentProjectName,
   };
-  const label = `Vimpel: ${elementLabel(sel)} — "${merknad}"`;
+  if (koordinater) payload.koordinater = koordinater;
+  const label = koordinater
+    ? `Vimpel: ${elementLabel(sel)} — "${merknad}" @ (${koordinater.x}, ${koordinater.y}, ${koordinater.z})`
+    : `Vimpel: ${elementLabel(sel)} — "${merknad}"`;
   closeVimpelForm();
   addToQueue(payload, label);
 }
@@ -302,6 +332,7 @@ addBtn.addEventListener("click", openVimpelForm);
 removeBtn.addEventListener("click", removeVimpel);
 formSubmitBtn.addEventListener("click", submitVimpelForm);
 formCancelBtn.addEventListener("click", closeVimpelForm);
+vimpelCoordToggle.addEventListener("change", toggleVimpelCoordFields);
 fargeButtons.forEach((btn) => {
   btn.addEventListener("click", () => openFargeForm(btn.dataset.hex, btn.dataset.navn));
 });

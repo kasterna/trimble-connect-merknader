@@ -179,7 +179,10 @@ def lag_vimpel(model, element, vx, vy, vz, fr, fg, fb, vimpel_navn):
 
 
 def _behandle_vimpel(model, item, dato):
-    """item: {guid, merknad, utfort_av, disiplin?, prosjekt?, revisjonsnummer?, flagg_farge?}"""
+    """item: {guid, merknad, utfort_av, disiplin?, prosjekt?, revisjonsnummer?, flagg_farge?, koordinater?}
+    koordinater (valgfri): {x, y, z} i modellens native enhet (mm for Revit/RIB) — brukes
+    som vimpelens plassering i stedet for det automatisk beregnede senteret av elementets
+    bounding box, når frontend-brukeren har krysset av for egne koordinater."""
     guid = item.get("guid", "")
     try:
         element = model.by_guid(guid)
@@ -194,26 +197,30 @@ def _behandle_vimpel(model, item, dato):
     prosjekt  = item.get("prosjekt", "")
     revnr     = item.get("revisjonsnummer", "")
 
-    # create_shape returnerer alltid i SI-meter (ifcopenshell normaliserer internt).
-    # Bruk verdskoordinater og konverter til modellens native eining (mm for Revit/RIB).
-    gs = ifcopenshell.geom.settings()
-    gs.set(gs.USE_WORLD_COORDS, True)
-    try:
-        shape = ifcopenshell.geom.create_shape(gs, element)
-        verts = shape.geometry.verts
-        xs, ys, zs = verts[0::3], verts[1::3], verts[2::3]
-        if not xs:
-            return False, "Ingen geometri"
-        vx = (min(xs) + max(xs)) / 2
-        vy = (min(ys) + max(ys)) / 2
-        vz = (min(zs) + max(zs)) / 2
-    except Exception as e:
-        return False, "Geometri-feil: " + str(e)
+    koord = item.get("koordinater")
+    if koord and all(koord.get(k) is not None for k in ("x", "y", "z")):
+        vx, vy, vz = float(koord["x"]), float(koord["y"]), float(koord["z"])
+    else:
+        # create_shape returnerer alltid i SI-meter (ifcopenshell normaliserer internt).
+        # Bruk verdskoordinater og konverter til modellens native eining (mm for Revit/RIB).
+        gs = ifcopenshell.geom.settings()
+        gs.set(gs.USE_WORLD_COORDS, True)
+        try:
+            shape = ifcopenshell.geom.create_shape(gs, element)
+            verts = shape.geometry.verts
+            xs, ys, zs = verts[0::3], verts[1::3], verts[2::3]
+            if not xs:
+                return False, "Ingen geometri"
+            vx = (min(xs) + max(xs)) / 2
+            vy = (min(ys) + max(ys)) / 2
+            vz = (min(zs) + max(zs)) / 2
+        except Exception as e:
+            return False, "Geometri-feil: " + str(e)
 
-    s = hent_skalafaktor(model)
-    vx *= s
-    vy *= s
-    vz *= s
+        s = hent_skalafaktor(model)
+        vx *= s
+        vy *= s
+        vz *= s
 
     vimpel_navn = VIMPEL_PREFIX + guid[:8]
     for existing in list(model.by_type("IfcBuildingElementProxy")):

@@ -109,6 +109,31 @@
       padding: 6px 12px;
       cursor: pointer;
     }
+    #vimpel-form .checkbox-label {
+      font-weight: normal;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 8px 0;
+    }
+    #vimpel-coord-fields {
+      display: none;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    #vimpel-coord-fields .coord-field {
+      flex: 1;
+    }
+    #vimpel-coord-fields label {
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+    #vimpel-coord-fields input {
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 13px;
+      padding: 4px;
+    }
 
     #farge-box {
       margin-bottom: 10px;
@@ -251,6 +276,21 @@
   <div id="vimpel-form">
     <label for="merknad-input">Merknad</label>
     <textarea id="merknad-input" placeholder="Skriv merknaden her..."></textarea>
+    <label class="checkbox-label"><input type="checkbox" id="vimpel-coord-toggle" /> Bruk egne koordinater i stedet for senter av objekt</label>
+    <div id="vimpel-coord-fields">
+      <div class="coord-field">
+        <label for="vimpel-x-input">X (mm)</label>
+        <input type="number" id="vimpel-x-input" step="any" />
+      </div>
+      <div class="coord-field">
+        <label for="vimpel-y-input">Y (mm)</label>
+        <input type="number" id="vimpel-y-input" step="any" />
+      </div>
+      <div class="coord-field">
+        <label for="vimpel-z-input">Z (mm)</label>
+        <input type="number" id="vimpel-z-input" step="any" />
+      </div>
+    </div>
     <div class="form-actions">
       <button id="form-submit-btn">Bekreft</button>
       <button id="form-cancel-btn">Avbryt</button>
