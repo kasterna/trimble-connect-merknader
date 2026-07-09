@@ -48,6 +48,7 @@ def api_vimpel():
         "disiplin": d.get("disiplin", ""),
         "prosjekt": d.get("prosjekt", ""),
         "revisjonsnummer": d.get("revisjonsnummer", ""),
+        "revisjonen_gjelder": d.get("revisjonen_gjelder", ""),
         "flagg_farge": d.get("flagg_farge", "#CC0000"),
     }
     try:
@@ -76,6 +77,7 @@ def api_farge():
         "disiplin": d.get("disiplin", ""),
         "prosjekt": d.get("prosjekt", ""),
         "revisjonsnummer": d.get("revisjonsnummer", ""),
+        "revisjonen_gjelder": d.get("revisjonen_gjelder", ""),
     }
     try:
         resultater = ifc_ops.behandle_items(sti, [item])

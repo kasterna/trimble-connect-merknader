@@ -36,11 +36,11 @@ def _legg_farge(model, geom_item, r, g, b):
     model.createIfcStyledItem(geom_item, [psa], None)
 
 
-def legg_til_ncc_produksjon(model, element, merknad, status, disiplin, prosjekt, utfort_av, revisjonsnummer, revisjonsdato):
+def legg_til_ncc_produksjon(model, element, merknad, status, disiplin, prosjekt, utfort_av, revisjonsnummer, revisjonsdato, revisjonen_gjelder=""):
     """Legger til eller oppdaterer NCC-Produksjon pset på et element.
 
     Generalisert versjon av dagens SOS-PRODUKSJON (D:\\SOS-Kolbotn\\app\\ifc_ops.py):
-    samme syv felter, men uten avhengighet til en "SOS-FELLES"-kildepset som ikke
+    samme åtte felter, men uten avhengighet til en "SOS-FELLES"-kildepset som ikke
     finnes i alle NCC-prosjekter. Prosjekt/Disiplin sendes inn direkte fra kallet
     (typisk hentet fra Trimble Connect-prosjektet i frontend) i stedet for å bli lest
     ut av modellen.
@@ -57,13 +57,14 @@ def legg_til_ncc_produksjon(model, element, merknad, status, disiplin, prosjekt,
                 break
     pset = ifcopenshell.api.run("pset.add_pset", model, product=element, name=PSET_NAVN)
     ifcopenshell.api.run("pset.edit_pset", model, pset=pset, properties={
-        "Merknad":         merknad or "",
-        "Status":          status or "Apen",
-        "Disiplin":        disiplin or "",
-        "Prosjekt":        prosjekt or "",
-        "Utfort_av":       utfort_av or "",
-        "Revisjonsnummer": revisjonsnummer or "",
-        "Revisjonsdato":   revisjonsdato or "",
+        "Merknad":            merknad or "",
+        "Status":             status or "Apen",
+        "Disiplin":           disiplin or "",
+        "Prosjekt":           prosjekt or "",
+        "Utfort_av":          utfort_av or "",
+        "Revisjonsnummer":    revisjonsnummer or "",
+        "Revisjonsdato":      revisjonsdato or "",
+        "Revisjonen_gjelder": revisjonen_gjelder or "",
     })
 
 
@@ -179,7 +180,7 @@ def lag_vimpel(model, element, vx, vy, vz, fr, fg, fb, vimpel_navn):
 
 
 def _behandle_vimpel(model, item, dato):
-    """item: {guid, merknad, utfort_av, disiplin?, prosjekt?, revisjonsnummer?, flagg_farge?, koordinater?}
+    """item: {guid, merknad, utfort_av, disiplin?, prosjekt?, revisjonsnummer?, revisjonen_gjelder?, flagg_farge?, koordinater?}
     koordinater (valgfri): {x, y, z} i modellens native enhet (mm for Revit/RIB) — brukes
     som vimpelens plassering i stedet for det automatisk beregnede senteret av elementets
     bounding box, når frontend-brukeren har krysset av for egne koordinater."""
@@ -196,6 +197,7 @@ def _behandle_vimpel(model, item, dato):
     disiplin  = item.get("disiplin", "")
     prosjekt  = item.get("prosjekt", "")
     revnr     = item.get("revisjonsnummer", "")
+    rev_gjelder = item.get("revisjonen_gjelder", "")
 
     koord = item.get("koordinater")
     if koord and all(koord.get(k) is not None for k in ("x", "y", "z")):
@@ -242,8 +244,8 @@ def _behandle_vimpel(model, item, dato):
     fr, fg, fb = hex_til_rgb(item.get("flagg_farge") or "#CC0000")
     proxy = lag_vimpel(model, element, vx, vy, vz, fr, fg, fb, vimpel_navn)
 
-    legg_til_ncc_produksjon(model, proxy,   merknad, "Apen", disiplin, prosjekt, utfort_av, revnr, dato)
-    legg_til_ncc_produksjon(model, element, merknad, "Apen", disiplin, prosjekt, utfort_av, revnr, dato)
+    legg_til_ncc_produksjon(model, proxy,   merknad, "Apen", disiplin, prosjekt, utfort_av, revnr, dato, rev_gjelder)
+    legg_til_ncc_produksjon(model, element, merknad, "Apen", disiplin, prosjekt, utfort_av, revnr, dato, rev_gjelder)
 
     return True, "Vimpel for " + guid[:12] + "... @ ({:.1f}, {:.1f}, {:.1f})".format(vx, vy, vz)
 
@@ -261,7 +263,7 @@ def _behandle_fjern_vimpel(model, item):
 
 
 def _behandle_farge(model, item, dato):
-    """item: {guid, farge, merknad, utfort_av, disiplin?, prosjekt?, revisjonsnummer?}
+    """item: {guid, farge, merknad, utfort_av, disiplin?, prosjekt?, revisjonsnummer?, revisjonen_gjelder?}
     Fargelegger elementet direkte (ingen ny geometri) og skriver NCC-Produksjon på det —
     i motsetning til vimpel er det ingen egen proxy å skrive pset-et på i tillegg."""
     guid = item.get("guid", "")
@@ -278,13 +280,14 @@ def _behandle_farge(model, item, dato):
     disiplin  = item.get("disiplin", "")
     prosjekt  = item.get("prosjekt", "")
     revnr     = item.get("revisjonsnummer", "")
+    rev_gjelder = item.get("revisjonen_gjelder", "")
 
     r, g, b = hex_til_rgb(farge_hex)
     farge_ok, farge_info = fargelegg_element(model, element, r, g, b)
     if not farge_ok:
         return False, "Fargelegging feilet: " + farge_info
 
-    legg_til_ncc_produksjon(model, element, merknad, "Apen", disiplin, prosjekt, utfort_av, revnr, dato)
+    legg_til_ncc_produksjon(model, element, merknad, "Apen", disiplin, prosjekt, utfort_av, revnr, dato, rev_gjelder)
 
     return True, "Farget " + guid[:12] + "... " + farge_hex
 

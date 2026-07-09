@@ -100,6 +100,14 @@
       font-size: 13px;
       padding: 6px;
     }
+    #vimpel-form input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 6px;
+      margin-bottom: 4px;
+    }
     #vimpel-form .form-actions {
       display: flex;
       gap: 8px;
@@ -179,6 +187,14 @@
       font-family: inherit;
       font-size: 13px;
       padding: 6px;
+    }
+    #farge-form input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 6px;
+      margin-bottom: 4px;
     }
     #farge-form .form-actions {
       display: flex;
@@ -276,6 +292,8 @@
   <div id="vimpel-form">
     <label for="merknad-input">Merknad</label>
     <textarea id="merknad-input" placeholder="Skriv merknaden her..."></textarea>
+    <label for="revisjonen-gjelder-input">Revisjonen gjelder</label>
+    <input type="text" id="revisjonen-gjelder-input" placeholder="Hva gjelder revisjonen..." />
     <label class="checkbox-label"><input type="checkbox" id="vimpel-coord-toggle" /> Bruk egne koordinater i stedet for senter av objekt</label>
     <div id="vimpel-coord-fields">
       <div class="coord-field">
@@ -311,6 +329,8 @@
   <div id="farge-form">
     <label for="farge-merknad-input">Merknad</label>
     <textarea id="farge-merknad-input" placeholder="Skriv merknaden her..."></textarea>
+    <label for="farge-revisjonen-gjelder-input">Revisjonen gjelder</label>
+    <input type="text" id="farge-revisjonen-gjelder-input" placeholder="Hva gjelder revisjonen..." />
     <div class="form-actions">
       <button id="farge-form-submit-btn">Bekreft</button>
       <button id="farge-form-cancel-btn">Avbryt</button>

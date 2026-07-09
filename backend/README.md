@@ -16,9 +16,9 @@ Skriver resultatet atomisk tilbake til samme IFC-fil (temp-fil + rename). **Bruk
 Eksempel på en kø-fil (samme format som extensionen laster ned):
 ```json
 [
-  { "type": "vimpel", "guid": "2fj8RrypX5JBqbfcwCdi9v", "merknad": "Sjekk fundament før støp", "utfort_av": "Kåre Sternang", "prosjekt": "SOS Kolbotn" },
+  { "type": "vimpel", "guid": "2fj8RrypX5JBqbfcwCdi9v", "merknad": "Sjekk fundament før støp", "revisjonen_gjelder": "Fundamentplassering", "utfort_av": "Kåre Sternang", "prosjekt": "SOS Kolbotn" },
   { "type": "fjern-vimpel", "guid": "29stQzX3z7sRMTx7Rx8N5i" },
-  { "type": "farge", "guid": "0rDnSheVT9Xer10COTOTtp", "farge": "#2E7D32", "merknad": "Sjekk armering før støp", "utfort_av": "Kåre Sternang", "prosjekt": "SOS Kolbotn" }
+  { "type": "farge", "guid": "0rDnSheVT9Xer10COTOTtp", "farge": "#2E7D32", "merknad": "Sjekk armering før støp", "revisjonen_gjelder": "Armeringsmengde", "utfort_av": "Kåre Sternang", "prosjekt": "SOS Kolbotn" }
 ]
 ```
 

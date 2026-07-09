@@ -9,6 +9,7 @@ const addBtn = document.getElementById("add-btn");
 const removeBtn = document.getElementById("remove-btn");
 const vimpelForm = document.getElementById("vimpel-form");
 const merknadInput = document.getElementById("merknad-input");
+const revisjonenGjelderInput = document.getElementById("revisjonen-gjelder-input");
 const vimpelCoordToggle = document.getElementById("vimpel-coord-toggle");
 const vimpelCoordFields = document.getElementById("vimpel-coord-fields");
 const vimpelXInput = document.getElementById("vimpel-x-input");
@@ -24,6 +25,7 @@ const queueClearBtn = document.getElementById("queue-clear-btn");
 const fargeButtons = Array.from(document.querySelectorAll(".farge-btn"));
 const fargeForm = document.getElementById("farge-form");
 const fargeMerknadInput = document.getElementById("farge-merknad-input");
+const fargeRevisjonenGjelderInput = document.getElementById("farge-revisjonen-gjelder-input");
 const fargeFormSubmitBtn = document.getElementById("farge-form-submit-btn");
 const fargeFormCancelBtn = document.getElementById("farge-form-cancel-btn");
 
@@ -168,6 +170,7 @@ async function handleViewerSelection(selection) {
 
 function openVimpelForm() {
   merknadInput.value = "";
+  revisjonenGjelderInput.value = "";
   vimpelCoordToggle.checked = false;
   vimpelXInput.value = "";
   vimpelYInput.value = "";
@@ -254,6 +257,11 @@ function submitVimpelForm() {
     merknadInput.focus();
     return;
   }
+  const revisjonenGjelder = revisjonenGjelderInput.value.trim();
+  if (!revisjonenGjelder) {
+    revisjonenGjelderInput.focus();
+    return;
+  }
   let koordinater = null;
   if (vimpelCoordToggle.checked) {
     const x = parseFloat(vimpelXInput.value);
@@ -271,6 +279,7 @@ function submitVimpelForm() {
     type: "vimpel",
     guid: sel.guid,
     merknad,
+    revisjonen_gjelder: revisjonenGjelder,
     utfort_av: utfortAv(),
     prosjekt: currentProjectName,
   };
@@ -295,6 +304,7 @@ function removeVimpel() {
 function openFargeForm(hex, navn) {
   pendingFarge = { hex, navn };
   fargeMerknadInput.value = "";
+  fargeRevisjonenGjelderInput.value = "";
   fargeForm.style.display = "block";
   fargeMerknadInput.focus();
 }
@@ -313,6 +323,11 @@ function submitFargeForm() {
     fargeMerknadInput.focus();
     return;
   }
+  const revisjonenGjelder = fargeRevisjonenGjelderInput.value.trim();
+  if (!revisjonenGjelder) {
+    fargeRevisjonenGjelderInput.focus();
+    return;
+  }
   const { hex, navn } = pendingFarge;
   for (const sel of currentSelection) {
     const payload = {
@@ -320,6 +335,7 @@ function submitFargeForm() {
       guid: sel.guid,
       farge: hex,
       merknad,
+      revisjonen_gjelder: revisjonenGjelder,
       utfort_av: utfortAv(),
       prosjekt: currentProjectName,
     };
